@@ -4,7 +4,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sentence_transformers import SentenceTransformer, util
+import numpy as np
+from fastembed import TextEmbedding
 
 from models import Club, StudentProfile, ClubRecommendation
 
@@ -31,8 +32,8 @@ BASE_DIR = Path(__file__).resolve().parent
 CLUBS_FILE = BASE_DIR / "data" / "clubs.json"
 
 
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
+embedding_model = TextEmbedding(
+    model_name="BAAI/bge-small-en-v1.5"
 )
 
 
@@ -1164,10 +1165,19 @@ print(
 )
 
 
-CLUB_EMBEDDINGS = embedding_model.encode(
-    CLUB_TEXTS,
-    convert_to_tensor=True,
-    show_progress_bar=True
+CLUB_EMBEDDINGS = np.array(
+    list(
+        embedding_model.embed(
+            CLUB_TEXTS,
+            batch_size=32
+        )
+    ),
+    dtype=np.float32
+)
+
+CLUB_EMBEDDING_NORMS = np.linalg.norm(
+    CLUB_EMBEDDINGS,
+    axis=1
 )
 
 
@@ -1264,18 +1274,26 @@ def get_recommendations(
         )
     )
 
-    student_embedding = (
-        embedding_model.encode(
-            student_text,
-            convert_to_tensor=True
-        )
+    student_embedding = np.array(
+        list(
+            embedding_model.embed(
+                [student_text]
+            )
+        )[0],
+        dtype=np.float32
+    )
+
+    student_norm = np.linalg.norm(
+        student_embedding
     )
 
     similarities = (
-        util.cos_sim(
-            student_embedding,
-            CLUB_EMBEDDINGS
-        )[0]
+        CLUB_EMBEDDINGS
+        @ student_embedding
+    ) / (
+        CLUB_EMBEDDING_NORMS
+        * student_norm
+        + 1e-8
     )
 
     recommendations = []
