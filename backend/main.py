@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
-from fastembed import TextEmbedding
 
 from models import Club, StudentProfile, ClubRecommendation
 
@@ -30,11 +29,11 @@ app.add_middleware(
 
 BASE_DIR = Path(__file__).resolve().parent
 CLUBS_FILE = BASE_DIR / "data" / "clubs.json"
+EMBEDDINGS_FILE = BASE_DIR / "data" / "club_embeddings.npy"
 
 
-embedding_model = TextEmbedding(
-    model_name="BAAI/bge-small-en-v1.5"
-)
+class RecommendationRequest(StudentProfile):
+    embedding: list[float]
 
 
 SYNONYM_GROUPS = {
@@ -1160,20 +1159,30 @@ CLUB_TEXTS = [
 
 
 print(
-    f"Generating embeddings for "
+    f"Loading precomputed embeddings for "
     f"{len(CLUBS)} UMD organizations..."
 )
 
 
-CLUB_EMBEDDINGS = np.array(
-    list(
-        embedding_model.embed(
-            CLUB_TEXTS,
-            batch_size=32
-        )
-    ),
-    dtype=np.float32
+if not EMBEDDINGS_FILE.exists():
+    raise RuntimeError(
+        "Missing data/club_embeddings.npy. "
+        "Run generate_embeddings.py locally before deployment."
+    )
+
+
+CLUB_EMBEDDINGS = np.load(
+    EMBEDDINGS_FILE,
+    mmap_mode="r"
 )
+
+
+if CLUB_EMBEDDINGS.shape[0] != len(CLUBS):
+    raise RuntimeError(
+        "club_embeddings.npy does not match clubs.json. "
+        "Regenerate embeddings locally."
+    )
+
 
 CLUB_EMBEDDING_NORMS = np.linalg.norm(
     CLUB_EMBEDDINGS,
@@ -1182,7 +1191,7 @@ CLUB_EMBEDDING_NORMS = np.linalg.norm(
 
 
 print(
-    "Club embeddings ready."
+    "Precomputed club embeddings ready."
 )
 
 
@@ -1265,27 +1274,38 @@ def get_club(
     response_model=list[ClubRecommendation]
 )
 def get_recommendations(
-    profile: StudentProfile
+    profile: RecommendationRequest
 ):
 
-    student_text = (
-        build_student_semantic_text(
-            profile
-        )
-    )
-
-    student_embedding = np.array(
-        list(
-            embedding_model.embed(
-                [student_text]
-            )
-        )[0],
+    student_embedding = np.asarray(
+        profile.embedding,
         dtype=np.float32
     )
+
+    if student_embedding.ndim != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Embedding must be one-dimensional."
+        )
+
+    if student_embedding.shape[0] != CLUB_EMBEDDINGS.shape[1]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Expected embedding dimension {CLUB_EMBEDDINGS.shape[1]}, "
+                f"received {student_embedding.shape[0]}."
+            )
+        )
 
     student_norm = np.linalg.norm(
         student_embedding
     )
+
+    if student_norm == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Embedding cannot be the zero vector."
+        )
 
     similarities = (
         CLUB_EMBEDDINGS

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { pipeline } from "@huggingface/transformers";
 import "./App.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -22,6 +23,20 @@ type Recommendation = {
   matched_terms: string[];
   explanation: string | null;
 };
+
+
+let embeddingPipelinePromise: Promise<any> | null = null;
+
+function getEmbeddingPipeline() {
+  if (!embeddingPipelinePromise) {
+    embeddingPipelinePromise = pipeline(
+      "feature-extraction",
+      "Xenova/all-MiniLM-L6-v2"
+    );
+  }
+
+  return embeddingPipelinePromise;
+}
 
 const UMD_MAJORS = [
   "Accounting",
@@ -99,6 +114,40 @@ function App() {
     setRecommendations([]);
 
     try {
+      const interestList = interests
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const skillList = skills
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const semanticText = [
+        major,
+        year,
+        ...interestList,
+        ...interestList,
+        ...interestList,
+        ...skillList,
+        ...skillList,
+      ].join(" ");
+
+      const extractor = await getEmbeddingPipeline();
+
+      const embeddingOutput = await extractor(
+        semanticText,
+        {
+          pooling: "mean",
+          normalize: true,
+        }
+      );
+
+      const embedding = Array.from(
+        embeddingOutput.data as Float32Array
+      );
+
       const response = await fetch(
         `${API_BASE_URL}/recommendations`,
         {
@@ -109,14 +158,9 @@ function App() {
           body: JSON.stringify({
             major,
             year,
-            interests: interests
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean),
-            skills: skills
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean),
+            interests: interestList,
+            skills: skillList,
+            embedding,
           }),
         }
       );
