@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import "./App.css";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
 type Club = {
   id: number;
   name: string;
@@ -98,7 +100,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/recommendations",
+        `${API_BASE_URL}/recommendations`,
         {
           method: "POST",
           headers: {
@@ -133,7 +135,7 @@ function App() {
       console.error(err);
 
       setError(
-        "Could not connect to the backend. Make sure FastAPI is running on port 8000."
+        "Could not connect to the recommendation service. Please try again."
       );
     } finally {
       setLoading(false);
