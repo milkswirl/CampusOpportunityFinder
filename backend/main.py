@@ -714,7 +714,7 @@ def normalize_text(
 
     return text.strip().lower()
 
-
+# Match complete terms so "ai" does not match inside words like "chair".
 def contains_term(
     text: str,
     term: str
@@ -752,7 +752,7 @@ def build_club_text(
         ]
     ).lower()
 
-
+# Repeat names, categories, and tags to emphasize them in the encoded text.
 def build_weighted_club_text(
     club: Club
 ) -> str:
@@ -1171,7 +1171,7 @@ if not EMBEDDINGS_FILE.exists():
         "Run generate_embeddings.py locally before deployment."
     )
 
-
+# Embedding rows must follow the same club order as clubs.json.
 CLUB_EMBEDDINGS = np.load(
     EMBEDDINGS_FILE,
     mmap_mode="r"
@@ -1307,7 +1307,7 @@ def get_recommendations(
             status_code=400,
             detail="Embedding cannot be the zero vector."
         )
-
+    # Compare the student's embedding with every club embedding using cosine similarity.
     similarities = (
         CLUB_EMBEDDINGS
         @ student_embedding
@@ -1363,7 +1363,7 @@ def get_recommendations(
                 club
             )
         )
-
+        # Combine semantic similarity with explicit interest, major, and skill matches.
         final_score = (
             semantic_score * 0.55
             + interest_score * 0.25

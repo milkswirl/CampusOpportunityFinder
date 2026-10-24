@@ -13,6 +13,7 @@ OUTPUT_FILE = BASE_DIR / "data" / "club_embeddings.npy"
 def build_weighted_club_text(club: dict) -> str:
     tags = club.get("tags", []) or []
 
+    # Repeat identifying fields to give them more emphasis than the description.
     return " ".join(
         [
             club.get("name", ""),

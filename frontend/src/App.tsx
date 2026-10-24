@@ -24,7 +24,7 @@ type Recommendation = {
   explanation: string | null;
 };
 
-
+// Reuse the model-loading promise so searches share one model instance.
 let embeddingPipelinePromise: Promise<any> | null = null;
 
 function getEmbeddingPipeline() {
@@ -124,6 +124,7 @@ function App() {
         .map((item) => item.trim())
         .filter(Boolean);
 
+      // Repeat interests and skills to emphasize them in the profile embedding.
       const semanticText = [
         major,
         year,
@@ -136,6 +137,7 @@ function App() {
 
       const extractor = await getEmbeddingPipeline();
 
+      // Use mean pooling and normalization to match the club embedding setup.
       const embeddingOutput = await extractor(
         semanticText,
         {
